@@ -1,2 +1,4 @@
 tfvenv
 settings.json
+credit_model.h5
+credit_model.weights.h5
