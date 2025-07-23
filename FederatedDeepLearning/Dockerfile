@@ -16,5 +16,3 @@ RUN uv sync --locked
 
 ENV PATH="/app/.venv/bin:$PATH"
 RUN chmod -R go+rX /app
-
-CMD ["python", "script.py"]
