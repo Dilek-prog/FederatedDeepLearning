@@ -78,3 +78,16 @@ Das Notebook deckt folgende Bereiche ab:
    jupyter notebook
    ```
 5. Öffne `FederatedMachineLearning.ipynb` und führe die Zellen der Reihe nach aus.
+
+## Federation Test Setup
+
+Es wird eine lokal Docker instanz benötigt.
+
+### Merge Algorithmen
+
+astrea https://ieeexplore.ieee.org/abstract/document/8988732
+
+
+## Ausblick 
+Fisher Weighted Average
+FedMerge https://arxiv.org/abs/2504.06768 
