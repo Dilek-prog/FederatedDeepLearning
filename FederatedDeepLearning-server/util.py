@@ -6,10 +6,8 @@ import re
 import pandas as pd
 import tensorflow as tf
 
-from config import METRICS_TO_PLOT, RESULTS_DIR
+from config import METRICS_TO_PLOT, RESULTS_DIR, SHARED_VOLUME_PATH
 
-
-SHARED_VOLUME_PATH = os.path.abspath("shared-data")
 
 def get_model_with_weights(step_name):
     model = get_model(step_name)
@@ -156,3 +154,18 @@ def get_params_by_variant(variant:str) -> dict:
     if not match:
         return {}
     return match.groupdict()
+
+
+def get_readable_tag_from_batch(batch):
+    pattern = re.compile(
+        r"(?P<algo>[^-]+)-(?P<optimizer>[^-]+)-(?P<lr>[\d.]+)-(?P<dropout>[\d.]+)-(?P<split>\d+)-(?P<step>\d+)"
+    )
+    return [
+        f"{(m := pattern.match(x)).group('algo')}"
+        f"\nopt={m.group('optimizer')}"
+        f"\nlr={m.group('lr')}"
+        f"\ndropout={m.group('dropout')}"
+        f"\nsplit={m.group('split')}"
+        for x in batch if (m := pattern.match(x))
+    ]
+

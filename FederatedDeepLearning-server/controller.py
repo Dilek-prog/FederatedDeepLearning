@@ -13,8 +13,9 @@ import docker
 from sklearn.model_selection import ParameterGrid
 
 from merger import fed_merge, no_merge, fed_prox, astraea_merge
-from util import SHARED_VOLUME_PATH, check_if_step_exists, get_model, prep_data, retrieve_global_metrics, \
+from util import check_if_step_exists, get_model, prep_data, retrieve_global_metrics, \
     retrieve_global_weights, retrieve_local_metrics, retrieve_local_weights
+from config import SHARED_VOLUME_PATH
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 

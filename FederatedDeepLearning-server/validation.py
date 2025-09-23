@@ -8,8 +8,8 @@ import pandas as pd
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.metrics import log_loss, precision_score, recall_score, roc_auc_score, accuracy_score
 
-from util import SHARED_VOLUME_PATH, find_best_variant, get_all_data, get_model, get_model_with_weights, get_params_by_variant
-from config import METRICS_TO_PLOT, PLOTS_DIR_VAL
+from util import find_best_variant, get_all_data, get_model_with_weights, get_params_by_variant, get_readable_tag_from_batch
+from config import METRICS_TO_PLOT, PLOTS_DIR_VAL, SHARED_VOLUME_PATH
 
 VALIDATION_FILE = f"{SHARED_VOLUME_PATH}/training_data/validation_data.csv"
 VALIDATION_DIR = f"{SHARED_VOLUME_PATH}/validation_results"
@@ -98,32 +98,19 @@ def create_validation_plots(validation_results):
 
         plt.figure(figsize=(10,6))
 
-        # Balkenfarbe
-        colors = plt.cm.viridis(df_metric["value"] / df_metric["value"].max())
-        bars = plt.bar(df_metric["algo"], df_metric["value"], color=colors)
+        plt.bar(get_readable_tag_from_batch(df_metric["batch"]), df_metric["value"])
 
         # Y-Skala "eingezoomt"
         y_min = max(0, df_metric["value"].min() - 0.01)  # kleiner Puffer
         y_max = df_metric["value"].max() + 0.01
-        # optional festen unteren Wert, z.B. für Loss oder Accuracy: z.B. y_min = 0.6
-        if metric == "accuracy" or metric == "precision" or metric == "recall":
-            y_min = max(0.6, y_min)
-        elif metric == "loss":
-            y_min = max(0, y_min)  # bei Log-Loss evtl. 0
+        if metric != "loss":
+            y_max = min(1.1, df_metric["value"].max() + 0.01)
 
         plt.ylim(y_min, y_max)
 
         plt.ylabel(metric.capitalize())
         plt.title(f"Validation – Beste Variante pro Algorithmus ({metric})")
-        plt.xticks(rotation=0)
-
-        # # Werte und Batchnamen über/unter Balken schreiben
-        # for i, row in df_metric.iterrows():
-        #     bars[i].set_edgecolor("black")
-        #     height = row["value"]
-        #     plt.text(i, height + (y_max - y_min)*0.01, f"{height:.3f}", ha='center', va='bottom', fontsize=9)
-        #     plt.text(i, y_min - (y_max - y_min)*0.05, f"{row['batch'].split('/')[-1]}", ha='center', va='top', fontsize=8, rotation=30)
-
+        plt.xticks(rotation=0, ha="center") 
         plt.tight_layout()
         plt.savefig(os.path.join(PLOTS_DIR_VAL, f"validation_{metric}.png"))
         plt.close()
@@ -131,7 +118,7 @@ def create_validation_plots(validation_results):
 
     print(f"✅ Validierungsplots gespeichert in: {PLOTS_DIR_VAL}")
 
-def main():
+def get_validation_data():
     all_data = get_all_data()
 
     validation_results = []
@@ -153,8 +140,10 @@ def main():
                 "value": metrics.get(metric),
                 "batch": batch
             })
+    return validation_results
 
-    create_validation_plots(validation_results)
+def main():
+    create_validation_plots(get_validation_data())
 
 
 if __name__ == "__main__":

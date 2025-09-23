@@ -10,12 +10,11 @@ from sklearn.metrics import log_loss, precision_score, recall_score, roc_auc_sco
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 
-from util import SHARED_VOLUME_PATH, find_best_variant, get_all_data, get_model_with_weights, get_params_by_variant, retrieve_global_metrics, retrieve_local_metrics, retrieve_local_weights
-from config import METRICS_TO_PLOT, PLOTS_DIR_TRAP_VAL, PLOTS_DIR_VAL
+from util import SHARED_VOLUME_PATH, find_best_variant, get_all_data, get_model_with_weights, get_params_by_variant, get_readable_tag_from_batch, retrieve_global_metrics, retrieve_local_metrics, retrieve_local_weights
+from config import METRICS_TO_PLOT, PLOTS_DIR_POISON_VAL, PLOTS_DIR_VAL, VALIDATION_FILE
 from merger import astraea_merge, fed_merge, no_merge, fed_prox
 
-VALIDATION_FILE = f"{SHARED_VOLUME_PATH}/training_data/validation_data.csv"
-TRAP_DIR = f"{SHARED_VOLUME_PATH}/trapped_results"
+
 
 def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
     """
@@ -48,7 +47,7 @@ def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
 
     return X_val, y_val
 
-def penetrate(batch):
+def poison(batch):
     """
     returns new weights after training model with fake data
     """
@@ -56,7 +55,7 @@ def penetrate(batch):
     def _set_up_trap(source: str):
         df = pd.read_csv(source, delimiter=";")
 
-        # reverse Data
+        # poison Data
         df["Status"] = 1 - df["Status"]
 
         X_train_full, X_test, y_train_full, y_test = train_test_split(
@@ -124,10 +123,10 @@ def penetrate(batch):
 
 def validate(batch, weights):
     os.makedirs(PLOTS_DIR_VAL, exist_ok=True)
-    os.makedirs(TRAP_DIR, exist_ok=True)
+    os.makedirs(PLOTS_DIR_POISON_VAL, exist_ok=True)
     X_val_file, y_val_file = _prepare_validation_df(VALIDATION_FILE)
     if X_val_file is None:
-        print("No validation evaluation performed (validation file missing or invalid).")
+        print("No posining evaluation performed (validation file missing or invalid).")
         return
 
     # Falls y_val aus Training übergeben wurde, wir verwenden hier die explizit gelesene Validation-Datei
@@ -166,8 +165,8 @@ def validate(batch, weights):
     return validation_metrics
 
 
-def create_trapped_validation_plots(validation_results):
-    os.makedirs(PLOTS_DIR_TRAP_VAL, exist_ok=True)
+def create_poisoned_validation_plots(validation_results):
+    os.makedirs(PLOTS_DIR_POISON_VAL, exist_ok=True)
     # DataFrame für die Plots
     df = pd.DataFrame(validation_results)
 
@@ -178,30 +177,26 @@ def create_trapped_validation_plots(validation_results):
         plt.figure(figsize=(10,6))
 
         # Balkenfarbe
-        colors = plt.cm.viridis(df_metric["value"] / df_metric["value"].max())
-        bars = plt.bar(df_metric["algo"], df_metric["value"], color=colors)
+        plt.bar(get_readable_tag_from_batch(df_metric["batch"]), df_metric["value"])
 
         # Y-Skala "eingezoomt"
         y_min = max(0, df_metric["value"].min() - 0.01)  # kleiner Puffer
         y_max = df_metric["value"].max() + 0.01
-        # optional festen unteren Wert, z.B. für Loss oder Accuracy: z.B. y_min = 0.6
-        if metric == "accuracy" or metric == "precision" or metric == "recall":
-            y_min = max(0.6, y_min)
-        elif metric == "loss":
-            y_min = max(0, y_min)  # bei Log-Loss evtl. 0
+        if metric != "loss":
+            y_max = min(1.1, df_metric["value"].max() + 0.01)
 
         plt.ylim(y_min, y_max)
 
         plt.ylabel(metric.capitalize())
-        plt.title(f"Validation – Beste Variante pro Algorithmus ({metric})")
+        plt.title(f"Data Poisoning - Beste Variante pro Algorithmus ({metric})")
         plt.xticks(rotation=0)
 
         plt.tight_layout()
-        plt.savefig(os.path.join(PLOTS_DIR_TRAP_VAL, f"validation_{metric}.png"))
+        plt.savefig(os.path.join(PLOTS_DIR_POISON_VAL, f"poisoning_{metric}.png"))
         plt.close()
 
 
-    print(f"✅ Validierungsplots gespeichert in: {PLOTS_DIR_TRAP_VAL}")
+    print(f"✅ Poisoningplots gespeichert in: {PLOTS_DIR_POISON_VAL}")
 
 def main():
     all_data = get_all_data()
@@ -217,7 +212,7 @@ def main():
             batch = f"{algo}-{params['opt']}-{params['lr']}-{params['dropout']}-{params['split']}-{int(params['split'])-1}"
 
             # test penetration
-            weights, history = penetrate(batch)
+            weights, history = poison(batch)
 
             merge_algorithms = {
                 "fed_merge": fed_merge, 
@@ -246,7 +241,7 @@ def main():
                 "batch": batch
             })
 
-    create_trapped_validation_plots(validation_results)
+    create_poisoned_validation_plots(validation_results)
 
 
 if __name__ == "__main__":
