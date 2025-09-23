@@ -10,4 +10,5 @@ dependencies = [
     "pandas>=2.3.0",
     "scikit-learn>=1.7.0",
     "tensorflow-federated>=0.1.0",
+    "tqdm>=4.67.1",
 ]
