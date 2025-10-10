@@ -1,6 +1,5 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import logging
-import math
+import json
 import shutil
 import os
 import argparse
@@ -14,16 +13,17 @@ from sklearn.model_selection import ParameterGrid
 
 from merger import fed_merge, no_merge, fed_prox, astraea_merge
 from util import check_if_step_exists, get_model, prep_data, retrieve_global_metrics, \
-    retrieve_global_weights, retrieve_local_metrics, retrieve_local_weights
-from config import SHARED_VOLUME_PATH
+    retrieve_global_weights, retrieve_local_metrics, retrieve_local_weights, save_history
+from config import SHARED_VOLUME_PATH, TRAINING_DATA
+from validation import validate
+from poisoning import poisoning
+from results import save_results
+
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 
 client = docker.from_env()
-
-os.makedirs(SHARED_VOLUME_PATH + "/training_data", exist_ok=True)
-os.makedirs(SHARED_VOLUME_PATH + "/weight_exchange", exist_ok=True)
 
 executor = None
 
@@ -40,6 +40,7 @@ signal.signal(signal.SIGTERM, shutdown)
 parser = argparse.ArgumentParser()
 parser.add_argument('--filepath', type=str, default=None, help='source for your training data')
 parser.add_argument('--splits', type=int, nargs='+', default=None, help='list of splits you want to train on')
+parser.add_argument('--iterations', type=int, default=1, help='Amount of times you want to train all models')
 parser.add_argument('--verbose', type=int, default=1, help='Set level of verbosity')
 args = parser.parse_args()
 
@@ -77,8 +78,8 @@ def run_container(name, image, volumes, command, **kwargs):
 
 def run_option(option, volumes):
     weight_location = ""
+    batch_name = f"{option["merge_algortihm"].__name__}-{option["optimizer"]}-{option["learning_rate"]}-{option["dropout"]}-{option["split"]}"
     for federation_step in range(option["split"]):
-        batch_name = f"{option["merge_algortihm"].__name__}-{option["optimizer"]}-{option["learning_rate"]}-{option["dropout"]}-{option["split"]}"
         step_name = f"{batch_name}-{federation_step}"
 
         if check_if_step_exists(step_name):
@@ -135,46 +136,68 @@ def run_option(option, volumes):
         model.set_weights(result_weights)
         model.save_weights(f"{SHARED_VOLUME_PATH}/weight_exchange/{batch_name}.weights.h5")
 
+    tqdm.write(f"Validating: {batch_name}")
+    os.makedirs(f"{SHARED_VOLUME_PATH}/{batch_name}-444", exist_ok=True)
+    with open(f"{SHARED_VOLUME_PATH}/{batch_name}-444/metrics.json", "w") as fp:
+        json.dump(
+            validate(f"{batch_name}-{option["split"] - 1}"),
+            fp
+        )
+
+    tqdm.write(f"Poisoning: {batch_name}")
+    os.makedirs(f"{SHARED_VOLUME_PATH}/{batch_name}-666", exist_ok=True)
+    with open(f"{SHARED_VOLUME_PATH}/{batch_name}-666/metrics.json", "w") as fp:
+        json.dump(
+            poisoning(f"{batch_name}-{option["split"] - 1}"),
+            fp
+        )
+
     return f"Batch {option} abgeschlossen"
 
 
 def main():
 
-    # tqdm.write("🔨 Building image ...")
-    # client.images.build(path="./FederatedDeepLearning-client", tag="federated-deep-learning:0.0.0", rm=True)
-    # tqdm.write("finished building image")
+    tqdm.write("🔨 Building image ...")
+    client.images.build(path="./FederatedDeepLearning-client", tag="federated-deep-learning:0.0.0", rm=True)
+    tqdm.write("finished building image")
 
     VOLUMES = {
         SHARED_VOLUME_PATH: {'bind': '/shared-data', 'mode': 'rw'}
     }
+    for iteration in range(args.iterations):
+        os.makedirs(SHARED_VOLUME_PATH + "/training_data", exist_ok=True)
+        os.makedirs(SHARED_VOLUME_PATH + "/weight_exchange", exist_ok=True)
+        # preparing training data
+        prep_data(
+            file=args.filepath,
+            splits=args.splits,
+            random_state=iteration
+        )
 
-    # preparing training data
-    prep_data(
-        file=args.filepath,
-        splits=args.splits,
-        random_state=1
-    )
+        options = ParameterGrid({
+            'merge_algortihm': [fed_merge, fed_prox, astraea_merge, no_merge],
+            'learning_rate': [0.1, 0.001, 0.0001],
+            'dropout': [0.2, 0.3, 0.4],
+            'split': args.splits,
+            'optimizer': ["adam", "sdg", "adadelta"]
+        })
 
-    options = ParameterGrid({
-        'merge_algortihm': [fed_merge, fed_prox, astraea_merge, no_merge],
-        'learning_rate': [0.1, 0.001, 0.0001],
-        'dropout': [0.2, 0.3, 0.4],
-        'split': args.splits,
-        'optimizer': ["adam", "sdg", "adadelta"]
-    })
+        start = time.time()
+        with tqdm(total=len(options), desc="Training Process") as pbar:
+            with ProcessPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(run_option, option, VOLUMES) for option in options]
 
-    start = time.time()
-    with tqdm(total=len(options), desc="Training Process") as pbar:
-        with ProcessPoolExecutor(max_workers=8) as executor:
-            futures = [executor.submit(run_option, option, VOLUMES) for option in options]
+                for future in as_completed(futures):
+                    result = future.result()
+                    pbar.update(1)
+                    tqdm.write(result)
 
-            for future in as_completed(futures):
-                result = future.result()
-                pbar.update(1)
-                tqdm.write(result)
+        end = time.time()
 
-    end = time.time()
-    tqdm.write(f"Laufzeit: {end - start:.2f} Sekunden")
+        save_results(iteration)
+        save_history(iteration)
+        shutil.rmtree(SHARED_VOLUME_PATH)
+        tqdm.write(f"Laufzeit: {(end - start) / 60:.2f} Minuten")
 
 
 if __name__ == "__main__":

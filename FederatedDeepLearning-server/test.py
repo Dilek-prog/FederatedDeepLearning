@@ -1,84 +1,60 @@
 import os
-import json
-import matplotlib.pyplot as plt
-from collections import defaultdict
-import re
+import pandas as pd
+from glob import glob
 
-from util import find_best_variant, get_all_data
-from config import METRICS_TO_PLOT, PLOTS_DIR_ALL, PLOTS_DIR_BEST, RESULTS_DIR
+# Basisordner (alles klein)
+BASE_DIR = "results"
 
+# Alle all-results.csv-Dateien in Unterordnern finden
+csv_files = glob(os.path.join(BASE_DIR, "*", "all_results.csv"))
 
-os.makedirs(PLOTS_DIR_ALL, exist_ok=True)
-os.makedirs(PLOTS_DIR_BEST, exist_ok=True)
+if not csv_files:
+    raise ValueError(f"❌ Keine 'all-results.csv'-Dateien im Ordner '{BASE_DIR}' gefunden!")
 
-GLOBAL_MARKERS_FILE = os.path.join(RESULTS_DIR, "global_markers.json")
+# Alle CSV-Dateien einlesen und kombinieren
+df_list = []
+for file in csv_files:
+    try:
+        temp = pd.read_csv(file)
+        temp["source_folder"] = os.path.basename(os.path.dirname(file))
+        df_list.append(temp)
+    except Exception as e:
+        print(f"⚠️ Fehler beim Lesen von {file}: {e}")
 
-all_data = get_all_data()
+data = pd.concat(df_list, ignore_index=True)
 
-# Globale Marker laden (optional)
-global_markers = {}
-if os.path.exists(GLOBAL_MARKERS_FILE):
-    with open(GLOBAL_MARKERS_FILE, "r") as f:
-        global_markers = json.load(f)
+# --- Konfiguration ---
+metrics = ["accuracy", "loss", "precision", "recall", "auc"]
+group_cols = ["algo", "optimizer", "learning_rate", "dropout", "split"]
+# ----------------------
 
-# Plot 1: Alle Varianten eines Algorithmus
-for metric in METRICS_TO_PLOT:
-    for algo, variants in all_data.items():
-        plt.figure(figsize=(10, 6))
-        for variant, step_data in variants.items():
-            steps_sorted = sorted(step_data.keys())
-            if not steps_sorted:
-                continue
-            max_step = max(steps_sorted) + 1
-            x = [(s / max_step) * 100 for s in steps_sorted]
-            y = [step_data[s].get(metric, 0) for s in steps_sorted]
-            plt.plot(x, y, marker='o', label=f"{variant}")
+# Datentypen sicherstellen
+for col in metrics + ["step", "learning_rate", "dropout", "split"]:
+    data[col] = pd.to_numeric(data[col], errors="coerce")
 
-        if metric in global_markers:
-            plt.axhline(y=global_markers[metric], color='gray', linestyle='--', label='Global Marker')
+# Nur Validation und Poison-Daten behalten
+data = data[data["step"].isin([444, 666])].copy()
 
-        plt.title(f"{metric.capitalize()} – alle Varianten von {algo}")
-        plt.xlabel("Genutzte Daten (%)")
-        plt.ylabel(metric.capitalize())
-        plt.xticks(range(0, 101, 10))
-        plt.grid(True)
-        plt.legend(fontsize="small")
-        plt.tight_layout()
-        plt.savefig(os.path.join(PLOTS_DIR_ALL, f"{algo}_{metric}_all_variants.png"))
-        plt.close()
+# Step-Typ zuordnen
+data["step_type"] = data["step"].map({444: "validation", 666: "poison"})
 
-# Plot 2: Beste Variante je Algorithmus
-for metric in METRICS_TO_PLOT:
-    plt.figure(figsize=(10, 6))
-    for algo, variants in all_data.items():
-        best_variant = None
+# Gruppieren nach Setup + Step-Typ
+grouped = data.groupby(group_cols + ["step_type"])
 
-        best_variant = find_best_variant(variants, metric)
+# Statistische Auswertung
+stats = grouped[metrics].agg(["mean", "var", "std", "min", "max", "count"])
+stats.columns = [f"{metric}_{stat}" for metric, stat in stats.columns]
+stats = stats.reset_index()
 
-        # Beste Variante plotten
-        if best_variant:
-            step_data = all_data[algo][best_variant]
-            steps_sorted = sorted(step_data.keys())
-            max_step = len(steps_sorted)   # letzter Step für diesen Algo
+# Sortieren für Übersicht
+stats = stats.sort_values(by=["algo", "optimizer", "learning_rate", "dropout", "split", "step_type"])
 
-            # Prozentuale Darstellung bezogen auf den max Step
-            x = [((s + 1) / max_step) * 100 for s in steps_sorted]
-            y = [step_data[s].get(metric, 0) for s in steps_sorted]
-            plt.plot(x, y, marker='o', label=f"{algo} (best: {best_variant})")
+# Ergebnisse speichern
+output_file = os.path.join(BASE_DIR, "aggregated_validation_poison.csv")
+stats.to_csv(output_file, index=False)
 
-    # Global Marker falls vorhanden
-    if metric in global_markers:
-        plt.axhline(y=global_markers[metric], color='gray', linestyle='--', label='Global Marker')
+print(f"✅ Aggregation abgeschlossen. Datei gespeichert unter: {output_file}")
+print(f"Gefundene Kombinationen (Setup + Step-Typ): {len(stats)}\n")
 
-    plt.title(f"{metric.capitalize()} – beste Variante pro Algorithmus")
-    plt.xlabel("Genutzte Daten (%)")
-    plt.ylabel(metric.capitalize())
-    plt.xticks(range(0, 101, 10))
-    plt.grid(True)
-    plt.legend(fontsize="small")
-    plt.tight_layout()
-    plt.savefig(os.path.join(PLOTS_DIR_BEST, f"{metric}_best_variants.png"))
-    plt.close()
+print(stats.head(10))
 
-
-print(f"✅ Plots gespeichert in:\n📂 {PLOTS_DIR_ALL} (alle Varianten)\n📂 {PLOTS_DIR_BEST} (beste Varianten)")

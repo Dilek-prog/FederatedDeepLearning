@@ -34,7 +34,6 @@ def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
         'Age',
         'Years_Experience',
         'Total_Family',
-        'Good rate'
     ]
 
     X_val = df_val.drop(["ID", "Status"], axis=1)
@@ -52,7 +51,7 @@ def poison(batch):
     returns new weights after training model with fake data
     """
 
-    def _set_up_trap(source: str):
+    def _set_up_poison(source: str):
         df = pd.read_csv(source, delimiter=";")
 
         # poison Data
@@ -72,7 +71,6 @@ def poison(batch):
             'Age',
             'Years_Experience',
             'Total_Family',
-            'Good rate'
         ]
 
         scaler = StandardScaler()
@@ -87,11 +85,19 @@ def poison(batch):
 
     def _train_model(model, x_data, y_data, x_val, y_val, class_weight):
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss',
+        early_stopping = keras.callbacks.EarlyStopping(
+            monitor='val_accuracy',   # watch validation accuracy
             patience=10,
-            restore_best_weights=True,
-            verbose=1
+            mode='max',
+            restore_best_weights=True
+        )
+
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(
+            monitor='val_accuracy',
+            factor=0.5,
+            patience=4,
+            mode='max',
+            min_lr=1e-6
         )
         history = model.fit(
             x_data,
@@ -100,12 +106,12 @@ def poison(batch):
             batch_size=32,
             validation_data=(x_val, y_val),
             class_weight=class_weight,
-            callbacks=[early_stopping],
+            callbacks=[early_stopping, reduce_lr],
             verbose=1
         )
         return model.get_weights(), history
 
-    X_train, X_test, y_train, y_test = _set_up_trap(VALIDATION_FILE)
+    X_train, X_test, y_train, y_test = _set_up_poison(VALIDATION_FILE)
     neg, pos = np.bincount(y_train)
     total = neg + pos
     class_weight = {0: (1/neg) * (total / 2.0), 1: (1/pos) * (total / 2.0)}
@@ -137,6 +143,7 @@ def validate(batch, weights):
     model = get_model_with_weights(batch)
     if weights:
         model.set_weights(weights)
+
     y_pred_prob = model.predict(X_val, batch_size=64).ravel()
     # harte Vorhersagen
     y_pred = (y_pred_prob >= 0.5).astype(int)
@@ -198,51 +205,27 @@ def create_poisoned_validation_plots(validation_results):
 
     print(f"✅ Poisoningplots gespeichert in: {PLOTS_DIR_POISON_VAL}")
 
-def main():
-    all_data = get_all_data()
+def poisoning(batch):
 
-    validation_results = []
+    # test penetration
+    weights, history = poison(batch)
 
-    for metric in METRICS_TO_PLOT:
-        for algo, variants in all_data.items():
-            best_variant = find_best_variant(variants, metric)
-            if best_variant is None:
-                continue
-            params = get_params_by_variant(best_variant)
-            batch = f"{algo}-{params['opt']}-{params['lr']}-{params['dropout']}-{params['split']}-{int(params['split'])-1}"
+    merge_algorithms = {
+        "fed_merge": fed_merge, 
+        "fed_prox": fed_prox,
+        "astraea_merge": astraea_merge, 
+        "no_merge": no_merge
+    }
 
-            # test penetration
-            weights, history = poison(batch)
+    # merge weights
+    result_weights = merge_algorithms[batch.split("-")[0]](
+        global_weights=retrieve_local_weights(batch),
+        local_weights=[weights],
+        sample_counts=[8, 2],
+        trust_scores=[
+            1 / retrieve_local_metrics(batch)["val_loss"],
+            1 / history["val_loss"]
+        ]
+    )
 
-            merge_algorithms = {
-                "fed_merge": fed_merge, 
-                "fed_prox": fed_prox,
-                "astraea_merge": astraea_merge, 
-                "no_merge": no_merge
-            }
-
-            # merge weights
-            result_weights = merge_algorithms[algo](
-                global_weights=retrieve_local_weights(batch),
-                local_weights=[weights],
-                sample_counts=[8, 2],
-                trust_scores=[
-                    1 / retrieve_local_metrics(batch)["val_loss"],
-                    1 / history["val_loss"]
-                ]
-            )
-            # Validierung durchführen
-            metrics = validate(batch, result_weights)
-
-            validation_results.append({
-                "algo": algo,
-                "metric": metric,
-                "value": metrics.get(metric),
-                "batch": batch
-            })
-
-    create_poisoned_validation_plots(validation_results)
-
-
-if __name__ == "__main__":
-    main()
+    return validate(batch, result_weights)

@@ -5,3 +5,5 @@ credit_model.weights.h5
 shared-data
 .venv
 __pycache__
+results
+history

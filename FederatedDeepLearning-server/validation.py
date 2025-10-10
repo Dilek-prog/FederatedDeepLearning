@@ -12,7 +12,6 @@ from util import find_best_variant, get_all_data, get_model_with_weights, get_pa
 from config import METRICS_TO_PLOT, PLOTS_DIR_VAL, SHARED_VOLUME_PATH
 
 VALIDATION_FILE = f"{SHARED_VOLUME_PATH}/training_data/validation_data.csv"
-VALIDATION_DIR = f"{SHARED_VOLUME_PATH}/validation_results"
 
 def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
     """
@@ -32,7 +31,6 @@ def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
         'Age',
         'Years_Experience',
         'Total_Family',
-        'Good rate'
     ]
 
     X_val = df_val.drop(["ID", "Status"], axis=1)
@@ -46,8 +44,6 @@ def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
     return X_val, y_val
 
 def validate(batch):
-    os.makedirs(PLOTS_DIR_VAL, exist_ok=True)
-    os.makedirs(VALIDATION_DIR, exist_ok=True)
     X_val_file, y_val_file = _prepare_validation_df(VALIDATION_FILE)
     if X_val_file is None:
         print("No validation evaluation performed (validation file missing or invalid).")
@@ -88,7 +84,6 @@ def validate(batch):
 
 
 def create_validation_plots(validation_results):
-    os.makedirs(VALIDATION_DIR, exist_ok=True)
     # DataFrame für die Plots
     df = pd.DataFrame(validation_results)
 
@@ -117,34 +112,3 @@ def create_validation_plots(validation_results):
 
 
     print(f"✅ Validierungsplots gespeichert in: {PLOTS_DIR_VAL}")
-
-def get_validation_data():
-    all_data = get_all_data()
-
-    validation_results = []
-
-    for metric in METRICS_TO_PLOT:
-        for algo, variants in all_data.items():
-            best_variant = find_best_variant(variants, metric)
-            if best_variant is None:
-                continue
-            params = get_params_by_variant(best_variant)
-            batch = f"{algo}-{params['opt']}-{params['lr']}-{params['dropout']}-{params['split']}-{int(params['split'])-1}"
-
-            # Validierung durchführen
-            metrics = validate(batch)
-
-            validation_results.append({
-                "algo": algo,
-                "metric": metric,
-                "value": metrics.get(metric),
-                "batch": batch
-            })
-    return validation_results
-
-def main():
-    create_validation_plots(get_validation_data())
-
-
-if __name__ == "__main__":
-    main()

@@ -122,7 +122,6 @@ def create_test_data(source: str):
         'Age',
         'Years_Experience',
         'Total_Family',
-        'Good rate'
     ]
 
     scaler = StandardScaler()
@@ -172,7 +171,8 @@ def create_model(
             'accuracy',
             tf.keras.metrics.Precision(),
             tf.keras.metrics.Recall(),
-            tf.keras.metrics.AUC()
+            tf.keras.metrics.AUC(),
+            'binary_crossentropy'
         ]
     )
     if weights:
@@ -182,12 +182,21 @@ def create_model(
 
 def train_model(model, x_data, y_data, x_val, y_val, class_weight):
 
-    early_stopping = tf.keras.callbacks.EarlyStopping(
-        monitor='val_loss',
+    early_stopping = keras.callbacks.EarlyStopping(
+        monitor='val_accuracy',   # watch validation accuracy
         patience=10,
-        restore_best_weights=True,
-        verbose=1
+        mode='max',
+        restore_best_weights=True
     )
+
+    reduce_lr = keras.callbacks.ReduceLROnPlateau(
+        monitor='val_accuracy',
+        factor=0.5,
+        patience=4,
+        mode='max',
+        min_lr=1e-6
+    )
+
     return model.fit(
         x_data,
         y_data,
@@ -195,7 +204,7 @@ def train_model(model, x_data, y_data, x_val, y_val, class_weight):
         batch_size=32,
         validation_data=(x_val, y_val),
         class_weight=class_weight,
-        callbacks=[early_stopping],
+        callbacks=[early_stopping, reduce_lr],
         verbose=1
     )
 

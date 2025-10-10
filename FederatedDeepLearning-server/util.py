@@ -3,10 +3,11 @@ import math
 import os
 import json
 import re
+import shutil
 import pandas as pd
 import tensorflow as tf
 
-from config import METRICS_TO_PLOT, RESULTS_DIR, SHARED_VOLUME_PATH
+from config import HISTORY_PATH, METRICS_TO_PLOT, RESULTS_DIR, SHARED_VOLUME_PATH
 
 
 def get_model_with_weights(step_name):
@@ -44,6 +45,17 @@ def check_if_step_exists(batchname: str):
     return os.path.exists(f"{SHARED_VOLUME_PATH}/{batchname}")
 
 
+def shared_volume_iteration(iteration: int):
+    return f"{SHARED_VOLUME_PATH}/{iteration}"
+
+def save_history(iteration: int):
+    shutil.copytree(
+        os.path.join(SHARED_VOLUME_PATH),
+        os.path.join(HISTORY_PATH, str(iteration)),
+        dirs_exist_ok=True,
+    )
+
+
 def prep_data(file: str, splits: list[int], random_state: int, validation_size: float = 0.2):
     import pandas as pd
     import math
@@ -74,8 +86,6 @@ def prep_data(file: str, splits: list[int], random_state: int, validation_size: 
             sample_df = train_df.iloc[start:end]
 
             name = f"{SHARED_VOLUME_PATH}/training_data/training_data_{split}_{i}.csv"
-            if os.path.exists(name):
-                continue
             sample_df.to_csv(name, index=False, sep=";")
 
 def find_best_variant(variants, metric):
