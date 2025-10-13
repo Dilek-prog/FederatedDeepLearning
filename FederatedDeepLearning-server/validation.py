@@ -26,7 +26,6 @@ def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
     df_val = pd.read_csv(validation_file, delimiter=";")
 
     numeric_features = [
-        'Children',
         'Income',
         'Age',
         'Years_Experience',

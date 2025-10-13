@@ -157,9 +157,9 @@ def run_option(option, volumes):
 
 def main():
 
-    tqdm.write("🔨 Building image ...")
-    client.images.build(path="./FederatedDeepLearning-client", tag="federated-deep-learning:0.0.0", rm=True)
-    tqdm.write("finished building image")
+    # tqdm.write("🔨 Building image ...")
+    # client.images.build(path="./FederatedDeepLearning-client", tag="federated-deep-learning:0.0.0", rm=True)
+    # tqdm.write("finished building image")
 
     VOLUMES = {
         SHARED_VOLUME_PATH: {'bind': '/shared-data', 'mode': 'rw'}
@@ -181,6 +181,14 @@ def main():
             'split': args.splits,
             'optimizer': ["adam", "sdg", "adadelta"]
         })
+
+        # options = ParameterGrid({
+        #     'merge_algortihm': [fed_merge],
+        #     'learning_rate': [0.1],
+        #     'dropout': [0.2],
+        #     'split': args.splits,
+        #     'optimizer': ["adam"]
+        # })
 
         start = time.time()
         with tqdm(total=len(options), desc="Training Process") as pbar:

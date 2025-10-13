@@ -117,7 +117,6 @@ def create_test_data(source: str):
     )
 
     numeric_features = [
-        'Children',
         'Income',
         'Age',
         'Years_Experience',
@@ -182,14 +181,14 @@ def create_model(
 
 def train_model(model, x_data, y_data, x_val, y_val, class_weight):
 
-    early_stopping = keras.callbacks.EarlyStopping(
+    early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor='val_accuracy',   # watch validation accuracy
         patience=10,
         mode='max',
         restore_best_weights=True
     )
 
-    reduce_lr = keras.callbacks.ReduceLROnPlateau(
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
         monitor='val_accuracy',
         factor=0.5,
         patience=4,
@@ -212,22 +211,6 @@ def train_model(model, x_data, y_data, x_val, y_val, class_weight):
 def save_results(model, batch_name: str, x_val, y_val, history):
     os.makedirs(f"/shared-data/{batch_name}", exist_ok=True)
     model.save_weights(f"/shared-data/{batch_name}/result.weights.h5")
-
-    # x_val_numeric = x_val.copy()
-    # for col in x_val_numeric.select_dtypes(include=['bool']).columns:
-    #     x_val_numeric[col] = x_val_numeric[col].astype(np.float32)
-    # x_val_numeric = x_val_numeric.astype(np.float32)
-
-    # loss_fn = tf.keras.losses.BinaryCrossentropy()
-    # with tf.GradientTape() as tape:
-    #     predictions = model(x_val_numeric)
-    #     loss = loss_fn(y_val, predictions)
-    # gradients = tape.gradient(loss, model.trainable_variables)
-    # for idx, grad in enumerate(gradients):
-    #     if grad is not None:
-    #         np.save(
-    #             f"/shared-data/{batch_name}/gradient_{idx}.npy", grad.numpy()
-    #         )
 
     last_metrics = {k: v[-1] for k, v in history.history.items()}
     with open(f"/shared-data/{batch_name}/metrics.json", "w") as f:

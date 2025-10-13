@@ -29,7 +29,6 @@ def _prepare_validation_df(validation_file: str, scaler=StandardScaler()):
     df_val = pd.read_csv(validation_file, delimiter=";")
 
     numeric_features = [
-        'Children',
         'Income',
         'Age',
         'Years_Experience',
@@ -66,7 +65,6 @@ def poison(batch):
         )
 
         numeric_features = [
-            'Children',
             'Income',
             'Age',
             'Years_Experience',
@@ -85,14 +83,14 @@ def poison(batch):
 
     def _train_model(model, x_data, y_data, x_val, y_val, class_weight):
 
-        early_stopping = keras.callbacks.EarlyStopping(
+        early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor='val_accuracy',   # watch validation accuracy
             patience=10,
             mode='max',
             restore_best_weights=True
         )
 
-        reduce_lr = keras.callbacks.ReduceLROnPlateau(
+        reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_accuracy',
             factor=0.5,
             patience=4,
