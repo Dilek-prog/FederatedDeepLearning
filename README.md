@@ -19,7 +19,7 @@ Das Notebook deckt folgende Bereiche ab:
 
     - Import und Bereinigung von Rohdaten.
     - Feature Engineering (z.B. Umwandlung von `Age`, `Years_Experience`).
-    - Ableitung der Zielvariable (`Credit Status`) und Berechnung der "Good Rate".
+    - Ableitung der Zielvariable (`Credit Status`).
     - One-Hot-Encoding für kategorische Features.
     - Standardisierung/Normalisierung von numerischen Features.
     - Aufteilung der Daten in Trainings-, Validierungs- und Testsets mit Stratifizierung, um die Klassenverteilung zu erhalten.
