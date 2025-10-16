@@ -14,7 +14,7 @@ from sklearn.model_selection import ParameterGrid
 from merger import fed_merge, no_merge, fed_prox, astraea_merge
 from util import check_if_step_exists, get_model, prep_data, retrieve_global_metrics, \
     retrieve_global_weights, retrieve_local_metrics, retrieve_local_weights, save_history
-from config import SHARED_VOLUME_PATH, TRAINING_DATA
+from config import SHARED_VOLUME_PATH
 from validation import validate
 from poisoning import poisoning
 from results import save_results

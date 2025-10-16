@@ -1,15 +1,11 @@
-from collections import defaultdict
-import json
 import os
-import re
-from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.metrics import log_loss, precision_score, recall_score, roc_auc_score, accuracy_score
 
-from util import find_best_variant, get_all_data, get_model_with_weights, get_params_by_variant, get_readable_tag_from_batch
-from config import METRICS_TO_PLOT, PLOTS_DIR_VAL, SHARED_VOLUME_PATH
+from util import get_model_with_weights
+from config import SHARED_VOLUME_PATH
 
 VALIDATION_FILE = f"{SHARED_VOLUME_PATH}/training_data/validation_data.csv"
 
@@ -81,33 +77,3 @@ def validate(batch):
     }
     return validation_metrics
 
-
-def create_validation_plots(validation_results):
-    # DataFrame für die Plots
-    df = pd.DataFrame(validation_results)
-
-    # Pro Metrik ein Diagramm
-    for metric in METRICS_TO_PLOT:
-        df_metric = df[df["metric"] == metric]
-
-        plt.figure(figsize=(10,6))
-
-        plt.bar(get_readable_tag_from_batch(df_metric["batch"]), df_metric["value"])
-
-        # Y-Skala "eingezoomt"
-        y_min = max(0, df_metric["value"].min() - 0.01)  # kleiner Puffer
-        y_max = df_metric["value"].max() + 0.01
-        if metric != "loss":
-            y_max = min(1.1, df_metric["value"].max() + 0.01)
-
-        plt.ylim(y_min, y_max)
-
-        plt.ylabel(metric.capitalize())
-        plt.title(f"Validation – Beste Variante pro Algorithmus ({metric})")
-        plt.xticks(rotation=0, ha="center") 
-        plt.tight_layout()
-        plt.savefig(os.path.join(PLOTS_DIR_VAL, f"validation_{metric}.png"))
-        plt.close()
-
-
-    print(f"✅ Validierungsplots gespeichert in: {PLOTS_DIR_VAL}")

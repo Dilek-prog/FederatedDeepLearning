@@ -1,8 +1,4 @@
-from collections import defaultdict
-import json
 import os
-import re
-from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.discriminant_analysis import StandardScaler
@@ -10,8 +6,8 @@ from sklearn.metrics import log_loss, precision_score, recall_score, roc_auc_sco
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 
-from util import SHARED_VOLUME_PATH, find_best_variant, get_all_data, get_model_with_weights, get_params_by_variant, get_readable_tag_from_batch, retrieve_global_metrics, retrieve_local_metrics, retrieve_local_weights
-from config import METRICS_TO_PLOT, PLOTS_DIR_POISON_VAL, PLOTS_DIR_VAL, VALIDATION_FILE
+from util import get_model_with_weights, retrieve_local_metrics, retrieve_local_weights
+from config import VALIDATION_FILE
 from merger import astraea_merge, fed_merge, no_merge, fed_prox
 
 
@@ -126,8 +122,6 @@ def poison(batch):
 
 
 def validate(batch, weights):
-    os.makedirs(PLOTS_DIR_VAL, exist_ok=True)
-    os.makedirs(PLOTS_DIR_POISON_VAL, exist_ok=True)
     X_val_file, y_val_file = _prepare_validation_df(VALIDATION_FILE)
     if X_val_file is None:
         print("No posining evaluation performed (validation file missing or invalid).")
@@ -168,40 +162,6 @@ def validate(batch, weights):
         "auc": auc
     }
     return validation_metrics
-
-
-def create_poisoned_validation_plots(validation_results):
-    os.makedirs(PLOTS_DIR_POISON_VAL, exist_ok=True)
-    # DataFrame für die Plots
-    df = pd.DataFrame(validation_results)
-
-    # Pro Metrik ein Diagramm
-    for metric in METRICS_TO_PLOT:
-        df_metric = df[df["metric"] == metric]
-
-        plt.figure(figsize=(10,6))
-
-        # Balkenfarbe
-        plt.bar(get_readable_tag_from_batch(df_metric["batch"]), df_metric["value"])
-
-        # Y-Skala "eingezoomt"
-        y_min = max(0, df_metric["value"].min() - 0.01)  # kleiner Puffer
-        y_max = df_metric["value"].max() + 0.01
-        if metric != "loss":
-            y_max = min(1.1, df_metric["value"].max() + 0.01)
-
-        plt.ylim(y_min, y_max)
-
-        plt.ylabel(metric.capitalize())
-        plt.title(f"Data Poisoning - Beste Variante pro Algorithmus ({metric})")
-        plt.xticks(rotation=0)
-
-        plt.tight_layout()
-        plt.savefig(os.path.join(PLOTS_DIR_POISON_VAL, f"poisoning_{metric}.png"))
-        plt.close()
-
-
-    print(f"✅ Poisoningplots gespeichert in: {PLOTS_DIR_POISON_VAL}")
 
 def poisoning(batch):
 

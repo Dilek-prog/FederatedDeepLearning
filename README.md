@@ -81,13 +81,65 @@ Das Notebook deckt folgende Bereiche ab:
 
 ## Federation Test Setup
 
-Es wird eine lokal Docker instanz benötigt.
+Das Federation Setup dient der automatisierten durchführung von Modelltrainings mit einem 
+Satz von Hyperparametern auf einem Prozentsatz der Trainingsdaten und mehreren durchläufen.
+Das Validieren und das Durchführen eines Poisoning Attacks sind ebenfalls Teil des Scripts.
+Es gibt außerdem eine automatische Erstellung von Evaluationsmetriken.
 
-### Merge Algorithmen
+### Voraussetzungen
 
-astrea https://ieeexplore.ieee.org/abstract/document/8988732
+Es wird eine lokale Docker-Instanz und uv als Packetmanager benötigt.
 
+### Installation
 
-## Ausblick 
-Fisher Weighted Average
-FedMerge https://arxiv.org/abs/2504.06768 
+Zum Installieren des Python environments wird UV benutzt. Nutze
+
+    uv sync
+
+zum installieren aller dependencies.
+
+### Starten des Trainingsprozesses
+
+    uv run FederatedDeepLearning-server/controller.py [args]
+
+Mögliche Argumente sind:
+- filepath: Gibt den Pfad zum Trainingsdatensatz an.
+- splits: Gibt an in wie viele Teile der Trainingsdatensatz unterteilt werden soll für das Training. Nimmt eine Liste entgegen.
+- iteration: Gibt an wie oft das Training wiederholt werden soll um vergleichbare Ergebnisse zu erzeugen.
+
+Beispielsweise könnte der Startbefehl so aussehen:
+
+    uv run FederatedDeepLearning-server/controller.py --filepath training_data_new.csv --splits 1 5 10 --iterations 5
+
+### Funktionsweise
+
+Das Setup besteht aus einem Controller und mehreren Docker-Containern, die jeweils ein Deep-Learning-Skript ausführen.
+
+#### Controller-Logik:
+
+- Der Controller startet für jede Konfiguration mehrere Container.
+
+- Jeder Container erhält einen Teil des Datensatzes (Split) zum Trainieren.
+
+- Die Anzahl der Splits (z. B. 1er, 5er oder 10er) bestimmt, in wie viele Teile der Datensatz aufgeteilt wird – und somit, wie viele Föderationsschritte stattfinden.
+
+#### Training & Föderation
+
+- Für jede Hyperparameter-Kombination wird jeder Split separat trainiert.
+
+- Bei mehrstufigen Splits (z. B. 5er) werden die Modelle nacheinander trainiert; jedes erhält die Gewichte des vorherigen.
+
+- Nach Abschluss aller Föderationen erfolgt eine Validierung auf einem separaten Datensatz sowie ein Poisoning-Test.
+
+#### Mehrfache Ausführung & Aggregation
+
+- Um die Ergebnisse vergleichbar zu machen, kann das komplette Setup mehrfach ausgeführt werden.
+
+- Alle Modelle und Ergebnisse werden versioniert im history/-Ordner abgelegt.
+
+- Der aggregate-results.py-Prozess fasst alle Resultate zusammen, mittelt sie und erzeugt eine aggregated-validation-poison.csv.
+
+#### Evaluation
+
+- Das Skript evaluation.py erstellt automatisch Tabellen und Visualisierungen, um die aggregierten Ergebnisse auszuwerten.
+
